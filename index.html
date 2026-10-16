@@ -72,36 +72,21 @@
     </div>
 
     <button class="main-btn" onclick="startGame()">クエストをはじめる ▶</button>
-
   </section>
 
-
-
   <!-- メインゲーム画面 -->
-
   <main id="gameScreen" class="hidden">
-
     <section class="stage" id="stage">
-
       <div class="location" id="location">🚶 道端</div>
-
       <div class="character-wrap">
-
         <img id="character" class="character" alt="登場人物">
-
         <div id="characterFallback" class="character-fallback">🧑</div>
-
       </div>
-
       <div class="person-name" id="personName">会話の相手</div>
-
     </section>
     <div class="dialog-wrap">
-
       <div class="dialog">
-
         <span class="dialog-label" id="dialogLabel">💬 お客さん</span>
-
         <div class="dialog-text" id="questionText"></div>
       </div>
 </div>
@@ -113,7 +98,6 @@
     </section>
 
 
-
     <div class="action">
 
       <button class="main-btn" id="nextButton" onclick="nextQuestion()" disabled>答えを選んでください ▶</button>
@@ -121,8 +105,6 @@
     </div>
 
   </main>
-
-
 
   <!-- クリア/結果画面 -->
 
@@ -446,7 +428,24 @@ const CHARACTERS = {
 customer04:{name:"マリアさん",icon:"🧳",normal:"images/characters/customer04_normal.png",happy:"images/characters/customer04_happy.png",angry:"images/characters/customer04_angry.png"
 
 },
+customer05:{name:"前田さん",icon:"🧳",normal:"images/characters/customer05_normal.png",happy:"images/characters/customer05_happy.png",angry:"images/characters/customer05_angry.png"
 
+},
+customer06:{name:"ナラヤンさん",icon:"🧳",normal:"images/characters/customer06_normal.png",happy:"images/characters/customer06_happy.png",angry:"images/characters/customer06_angry.png"
+
+},
+customer07:{name:"カジャルさん",icon:"🧳",normal:"images/characters/customer07_normal.png",happy:"images/characters/customer07_happy.png",angry:"images/characters/customer07_angry.png"
+
+},
+customer08:{name:"マノズさん",icon:"🧳",normal:"images/characters/customer08_normal.png",happy:"images/characters/customer08_happy.png",angry:"images/characters/customer08_angry.png"
+
+},
+customer09:{name:"サンジープさん",icon:"🧳",normal:"images/characters/customer09_normal.png",happy:"images/characters/customer09_happy.png",angry:"images/characters/customer09_angry.png"
+
+},
+customer10:{name:"西畑先生",icon:"🧳",normal:"images/characters/customer10_normal.png",happy:"images/characters/customer10_happy.png",angry:"images/characters/customer10_angry.png"
+
+},
   manager: { name: "先生", icon: "🧑‍🏫", normal: "images/characters/manager_normal.png",happy:"images/characters/manager_happy.png",angry:"images/characters/manager_angry.png" }
 
 };
