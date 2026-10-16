@@ -1,0 +1,2132 @@
+<!DOCTYPE html>
+
+<html lang="ja" translate="no">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="google" content="notranslate">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<meta name="theme-color" content="#14794d">
+
+<title>JFT-BASIC 会話クエスト｜生活の日本語</title>
+
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+
+
+<canvas id="particleCanvas"></canvas>
+
+
+
+<div class="game">
+
+  <header class="topbar">
+
+    <div class="logo">💬 JFT-BASIC 会話クエスト</div>
+
+    <div class="stats">
+
+      <div class="stat" id="statCoin">🪙 <span id="coin">0</span></div>
+
+      <div class="stat" id="statStreak">🔥 <span id="streak">0</span>連勝</div>
+
+      <div class="stat">⭕ <span id="correctCount">0</span></div>
+
+    </div>
+
+  </header>
+
+
+
+  <div class="progress-wrap hidden" id="progressWrap">
+
+    <div class="progress-line"><span id="missionLabel">会話クエスト</span><span id="progressText">0 / 10</span></div>
+
+    <div class="progress-track">
+
+      <div class="progress-bar" id="progressBar"></div>
+
+    </div>
+
+    <div class="timer-bar hidden" id="timerBar"></div>
+
+  </div>
+
+
+
+  <!-- スタート画面 -->
+
+  <section class="screen" id="startScreen">
+
+    <div class="screen-icon">
+  <img src="images/start.png" alt="会話クエストのスタート画像">
+</div>
+
+    <div class="intro-card">
+      <strong>会話の＿＿＿＿に入る自然な言葉を選ぼう！</strong>
+    </div>
+
+    <button class="main-btn" onclick="startGame()">クエストをはじめる ▶</button>
+
+  </section>
+
+
+
+  <!-- メインゲーム画面 -->
+
+  <main id="gameScreen" class="hidden">
+
+    <section class="stage" id="stage">
+
+      <div class="location" id="location">🚶 道端</div>
+
+      <div class="character-wrap">
+
+        <img id="character" class="character" alt="登場人物">
+
+        <div id="characterFallback" class="character-fallback">🧑</div>
+
+      </div>
+
+      <div class="person-name" id="personName">会話の相手</div>
+
+    </section>
+
+
+
+    <div class="dialog-wrap">
+
+      <div class="dialog">
+
+        <span class="dialog-label" id="dialogLabel">💬 お客さん</span>
+
+        <div class="dialog-text" id="questionText"></div>
+
+      </div>
+
+    </div>
+    <section class="answer-area">
+      <p class="instruction" id="instruction">どう対応しますか？</p>
+
+      <div class="choices" id="choices"></div>
+
+      <div class="feedback" id="feedback" aria-live="polite"></div>
+
+      <div class="manager-line hidden" id="managerLine"></div>
+
+    </section>
+
+
+
+    <div class="action">
+
+      <button class="main-btn" id="nextButton" onclick="nextQuestion()" disabled>答えを選んでください ▶</button>
+
+    </div>
+
+  </main>
+
+
+
+  <!-- クリア/結果画面 -->
+
+  <section class="screen hidden" id="endScreen">
+
+<div class="screen-icon">
+  <img id="endImage"
+       src="images/result.png"
+       alt="クエストの結果画像">
+</div>
+
+    <h1 id="endTitle">研修終了！</h1>
+
+    <p id="endMessage"></p>
+
+    <div class="rank-card">
+
+      <div id="rankName">新人スタッフ</div>
+
+      <small>正解数：<span id="finalCorrect">0</span> / <span id="finalTotal">10</span> 問</small><br>
+
+      <small>正解率：<span id="finalRate">0</span>%</small>
+
+    </div>
+
+    <div class="intro-card" id="review"></div>
+
+    <button class="main-btn" onclick="restartGame()">🔄 もう一度挑戦する</button>
+
+  </section>
+
+</div>
+
+
+
+<script>
+
+/* ===================================================
+
+   Web Audio API による効果音生成エンジン（外部ファイル不要）
+
+\=================================================== */
+
+const AudioEngine = {
+
+  ctx: null,
+
+  init() {
+
+    if (!this.ctx) {
+
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    }
+
+  },
+
+  playCorrect() {
+
+    this.init();
+
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+
+    osc.frequency.setValueAtTime(523.25, now); // C5
+
+    osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+
+    osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+
+    gain.gain.setValueAtTime(0.15, now);
+
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+    osc.connect(gain);
+
+    gain.connect(this.ctx.destination);
+
+    osc.start(now);
+
+    osc.stop(now + 0.5);
+
+  },
+
+  playWrong() {
+
+    this.init();
+
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+
+    osc.frequency.setValueAtTime(220, now); // A3
+
+    osc.frequency.setValueAtTime(164.81, now + 0.15); // E3
+
+    gain.gain.setValueAtTime(0.15, now);
+
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+    osc.connect(gain);
+
+    gain.connect(this.ctx.destination);
+
+    osc.start(now);
+
+    osc.stop(now + 0.4);
+
+  },
+
+  playFanfare() {
+
+    this.init();
+
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+
+    notes.forEach((freq, i) => {
+
+      const osc = this.ctx.createOscillator();
+
+      const gain = this.ctx.createGain();
+
+      const now = this.ctx.currentTime + i * 0.12;
+
+      osc.type = 'triangle';
+
+      osc.frequency.setValueAtTime(freq, now);
+
+      gain.gain.setValueAtTime(0.2, now);
+
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+      osc.connect(gain);
+
+      gain.connect(this.ctx.destination);
+
+      osc.start(now);
+
+      osc.stop(now + 0.4);
+
+    });
+
+  }
+
+};
+
+
+
+/* ===================================================
+
+   パーティクル（紙吹雪）エンジン
+
+\=================================================== */
+
+const ParticleEngine = {
+
+  canvas: document.getElementById('particleCanvas'),
+
+  ctx: document.getElementById('particleCanvas').getContext('2d'),
+
+  particles: [],
+
+  animId: null,
+
+  init() {
+
+    this.resize();
+
+    window.addEventListener('resize', () => this.resize());
+
+  },
+
+  resize() {
+
+    this.canvas.width = window.innerWidth;
+
+    this.canvas.height = window.innerHeight;
+
+  },
+
+  fire() {
+
+    this.particles = [];
+
+    const colors = ['#20b76c', '#ffd65a', '#2878d0', '#ff5252', '#ab47bc'];
+
+    for (let i = 0; i < 80; i++) {
+
+      this.particles.push({
+
+        x: window.innerWidth / 2,
+
+        y: window.innerHeight / 2,
+
+        vx: (Math.random() - 0.5) * 18,
+
+        vy: (Math.random() - 0.7) * 18,
+
+        color: colors[Math.floor(Math.random() * colors.length)],
+
+        size: Math.random() * 8 + 4,
+
+        rotation: Math.random() * 360,
+
+        rotSpeed: (Math.random() - 0.5) * 10
+
+      });
+
+    }
+
+    if (!this.animId) this.loop();
+
+  },
+
+  loop() {
+
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    this.particles.forEach((p, i) => {
+
+      p.x += p.vx;
+
+      p.y += p.vy;
+
+      p.vy += 0.4; // 重力
+
+      p.rotation += p.rotSpeed;
+
+      this.ctx.save();
+
+      this.ctx.translate(p.x, p.y);
+
+      this.ctx.rotate((p.rotation * Math.PI) / 180);
+
+      this.ctx.fillStyle = p.color;
+
+      this.ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+
+      this.ctx.restore();
+
+    });
+
+    this.particles = this.particles.filter(p => p.y < this.canvas.height);
+
+    if (this.particles.length > 0) {
+
+      this.animId = requestAnimationFrame(() => this.loop());
+
+    } else {
+
+      this.animId = null;
+
+    }
+
+  }
+
+};
+
+ParticleEngine.init();
+
+
+
+/* ===================================================
+
+   ゲーム設定＆データ
+
+\=================================================== */
+
+const GAME_CONFIG = {
+  background: "images/backgrounds/street.jpg",
+  coinPerCorrect: 10,
+  streakBonusCoins: 5
+};
+
+// 会話の場面に合わせて背景を切り替えます。画像がない場合は street.jpg が使われます。
+const LOCATION_BACKGROUNDS = {
+  "道端": "images/backgrounds/street.jpg",
+
+  "教室": "images/backgrounds/classroom.jpg",
+  "学校の入口": "images/backgrounds/school.jpg",
+  "駅": "images/backgrounds/station.jpg",
+  "バス停": "images/backgrounds/bus_stop.jpg",
+  "家": "images/backgrounds/home.jpg",
+  "食堂": "images/backgrounds/restaurant.jpg",
+  "スーパー": "images/backgrounds/supermarket.jpg",
+  "病院": "images/backgrounds/hospital.jpg",
+  "会社": "images/backgrounds/office.jpg",
+  "図書館": "images/backgrounds/library.jpg",
+  "郵便局": "images/backgrounds/post_office.jpg",
+  "公園": "images/backgrounds/park.jpg",
+  "市役所": "images/backgrounds/city_hall.jpg",
+  "電話": "images/backgrounds/phone.jpg",
+  "海": "images/backgrounds/sea.jpg"
+};
+
+function changeBackground(locationName) {
+  const stage = document.getElementById("stage");
+  const background = LOCATION_BACKGROUNDS[locationName] || GAME_CONFIG.background;
+  stage.style.backgroundImage = `url('${background}')`;
+}
+
+const CHARACTERS = {
+
+  customer01: { name: "田中さん", icon: "👨", normal: "images/characters/customer01_normal.png",happy:"images/characters/customer01_happy.png",angry:"images/characters/customer01_angry.png" },
+
+  customer02: { name: "山本さん", icon: "👩", normal: "images/characters/customer02_normal.png",happy:"images/characters/customer02_happy.png",angry:"images/characters/customer02_angry.png" },
+
+  customer03:{name:"佐藤さん",icon:"🧓",normal:"images/characters/customer03_normal.png",happy:"images/characters/customer03_happy.png",angry:"images/characters/customer03_angry.png"},
+
+
+
+customer04:{name:"マリアさん",icon:"🧳",normal:"images/characters/customer04_normal.png",happy:"images/characters/customer04_happy.png",angry:"images/characters/customer04_angry.png"
+
+},
+
+  manager: { name: "先生", icon: "🧑‍🏫", normal: "images/characters/manager_normal.png",happy:"images/characters/manager_happy.png",angry:"images/characters/manager_angry.png" }
+
+};
+
+
+
+const quiz = [
+  {
+    type:"会話", character:"customer01", location:"道端",
+    text:"A：日本へ来て何年ですか。<br>B：3年＿＿＿＿。",
+    instruction:"＿＿＿＿に入る言葉を選びなさい。",
+    choices:["です", "あります", "します"], answer:0,
+    explanation:"年数を答えるときは「3年です」と言います。",
+    manager:"いいですね！年数を答える表現を覚えましょう。"
+  },
+  {
+    type:"会話", character:"customer02", location:"教室",
+    text:"A：すみません、もう一度言ってください。<br>B：＿＿＿＿。",
+    instruction:"自然な返事を選びなさい。",
+    choices:["はい、もう一度言います", "はい、昨日です", "いいえ、行きました"], answer:0,
+    explanation:"もう一度言ってほしいと言われたら、繰り返して伝えます。",
+    manager:"相手のお願いに合った返事ですね。"
+  },
+  {
+    type:"会話", character:"customer01", location:"駅",
+    text:"A：すみません。駅はどこですか。<br>B：この道をまっすぐ＿＿＿＿。",
+    instruction:"＿＿＿＿に入る言葉を選びなさい。",
+    choices:["行ってください", "食べてください", "飲んでください"], answer:0,
+    explanation:"道順を説明するときは「まっすぐ行ってください」と言います。",
+    manager:"道案内でよく使う表現です。"
+  },
+  {
+    type:"会話", character:"customer02", location:"スーパー",
+    text:"A：このりんごはいくらですか。<br>B：1個＿＿＿＿円です。",
+    instruction:"値段を聞かれたときの答えを選びなさい。",
+    choices:["150円", "15時", "150人"], answer:0,
+    explanation:"値段は「150円」のように「円」を使って答えます。",
+    manager:"買い物で役立つ会話ですね。"
+  },
+  {
+    type:"会話", character:"customer03", location:"学校の入口",
+    text:"A：明日、学校に来ますか。<br>B：はい、＿＿＿＿。",
+    instruction:"自然な返事を選びなさい。",
+    choices:["来ます", "来ました", "来ませんでした"], answer:0,
+    explanation:"明日のことなので、これからのことを表す「来ます」が自然です。",
+    manager:"時間に合わせて言い方を選びましょう。"
+  },
+  {
+    type:"会話", character:"customer04", location:"家",
+    text:"A：毎朝、何時に起きますか。<br>B：6時＿＿＿＿起きます。",
+    instruction:"＿＿＿＿に入る言葉を選びなさい。",
+    choices:["に", "を", "で"], answer:0,
+    explanation:"時刻を表す言葉の後ろには「に」を使います。",
+    manager:"「6時に起きます」と言います。"
+  },
+  {
+    type:"会話", character:"customer01", location:"食堂",
+    text:"A：何を食べますか。<br>B：カレーライス＿＿＿＿。",
+    instruction:"自然な言葉を選びなさい。",
+    choices:["にします", "があります", "にいます"], answer:0,
+    explanation:"食べるものを決めるときは「カレーライスにします」と言えます。",
+    manager:"注文するときに使える表現です。"
+  },
+  {
+    type:"会話", character:"customer02", location:"バス停",
+    text:"A：このバスは市役所へ行きますか。<br>B：いいえ、＿＿＿＿。",
+    instruction:"自然な返事を選びなさい。",
+    choices:["行きません", "行きましたか", "行くでした"], answer:0,
+    explanation:"現在の運行について否定するときは「行きません」と言います。",
+    manager:"否定の形も大切ですね。"
+  },
+  {
+    type:"会話", character:"customer03", location:"病院",
+    text:"A：どうしましたか。<br>B：頭が＿＿＿＿。",
+    instruction:"体の調子を説明する言葉を選びなさい。",
+    choices:["痛いです", "高いです", "遠いです"], answer:0,
+    explanation:"体の症状は「頭が痛いです」のように伝えます。",
+    manager:"体調が悪いときに使う表現です。"
+  },
+  {
+    type:"会話", character:"customer04", location:"会社",
+    text:"A：今日は残業できますか。<br>B：すみません。今日は用事が＿＿＿＿。",
+    instruction:"＿＿＿＿に入る言葉を選びなさい。",
+    choices:["あります", "います", "します"], answer:0,
+    explanation:"予定や用事があるときは「用事があります」と言います。",
+    manager:"予定を伝えるときに便利な表現です。"
+  },
+  {
+    type:"会話", character:"customer01", location:"図書館",
+    text:"A：ここで写真を撮ってもいいですか。<br>B：すみません、写真は＿＿＿＿。",
+    instruction:"禁止を伝える言葉を選びなさい。",
+    choices:["撮らないでください", "撮ってください", "撮りたいです"], answer:0,
+    explanation:"禁止や注意を伝えるときは「〜ないでください」を使います。",
+    manager:"ルールを丁寧に伝えられています。"
+  },
+  {
+    type:"会話", character:"customer02", location:"郵便局",
+    text:"A：この荷物をネパールへ送りたいです。<br>B：＿＿＿＿。",
+    instruction:"自然な返事を選びなさい。",
+    choices:["かしこまりました", "おめでとうございます", "いただきます"], answer:0,
+    explanation:"窓口で依頼を受けたときは「かしこまりました」と言えます。",
+    manager:"丁寧な受け答えですね。"
+  },
+  {
+    type:"会話", character:"customer03", location:"公園",
+    text:"A：週末、何をしましたか。<br>B：友だちと公園へ＿＿＿＿。",
+    instruction:"＿＿＿＿に入る言葉を選びなさい。",
+    choices:["行きました", "行きます", "行くです"], answer:0,
+    explanation:"終わった週末のことなので、過去形の「行きました」を使います。",
+    manager:"過去のことを話すときは「ました」です。"
+  },
+  {
+    type:"会話", character:"customer04", location:"市役所",
+    text:"A：すみません、転入届を出したいです。<br>B：では、こちらに住所を＿＿＿＿ください。",
+    instruction:"＿＿＿＿に入る言葉を選びなさい。",
+    choices:["書いて", "書く", "書きます"], answer:0,
+    explanation:"お願いをするときは「て形＋ください」を使います。",
+    manager:"手続きでよく聞く表現です。"
+  },
+  {
+    type:"会話", character:"customer01", location:"電話",
+    text:"A：もしもし、田中さんはいらっしゃいますか。<br>B：少々お待ち＿＿＿＿。",
+    instruction:"＿＿＿＿に入る言葉を選びなさい。",
+    choices:["ください", "しました", "あります"], answer:0,
+    explanation:"電話で相手を待たせるときは「少々お待ちください」と言います。",
+    manager:"電話で使う丁寧な表現です。"
+  },
+  {
+    type:"会話", character:"customer02", location:"教室",
+    text:"A：宿題はもう終わりましたか。<br>B：いいえ、まだ＿＿＿＿。",
+    instruction:"自然な言葉を選びなさい。",
+    choices:["終わっていません", "終わりました", "終わりますでした"], answer:0,
+    explanation:"まだ終わっていないことは「まだ終わっていません」と言います。",
+    manager:"「まだ〜ていません」はよく使います。"
+  },
+  {
+    type:"会話", character:"customer03", location:"駅",
+    text:"A：何時に出発しますか。<br>B：9時＿＿＿＿出発します。",
+    instruction:"＿＿＿＿に入る言葉を選びなさい。",
+    choices:["に", "を", "へ"], answer:0,
+    explanation:"出発する時刻には「9時に」のように「に」を使います。",
+    manager:"時刻を言うときの助詞です。"
+  },
+  {
+    type:"会話", character:"customer04", location:"スーパー",
+    text:"A：袋はご利用ですか。<br>B：はい、1枚＿＿＿＿。",
+    instruction:"お願いの言葉を選びなさい。",
+    choices:["お願いします", "お疲れさまです", "失礼しました"], answer:0,
+    explanation:"何かを頼むときは「お願いします」と言えます。",
+    manager:"短くても丁寧にお願いできますね。"
+  },
+  {
+    type:"会話", character:"customer01", location:"家",
+    text:"A：窓が開いていますよ。<br>B：あ、ありがとうございます。すぐ＿＿＿＿。",
+    instruction:"自然な言葉を選びなさい。",
+    choices:["閉めます", "閉めましたか", "閉めるでした"], answer:0,
+    explanation:"これからすることを伝えるので「閉めます」が自然です。",
+    manager:"これからすることは「ます形」で伝えられます。"
+  },
+  {
+    type:"会話", character:"customer02", location:"会社",
+    text:"A：すみません、明日は休んでもいいですか。<br>B：わかりました。では、担当者に＿＿＿＿ください。",
+    instruction:"＿＿＿＿に入る言葉を選びなさい。",
+    choices:["連絡して", "連絡する", "連絡でした"], answer:0,
+    explanation:"依頼を表すときは「連絡して（て形）ください」と言います。",
+    manager:"仕事で必要な連絡の表現です。"
+  },
+  {
+    type:"会話", character:"customer03", location:"道端",
+    text:"A：すみません、写真を撮っていただけませんか。<br>B：＿＿＿＿。",
+    instruction:"自然な返事を選びなさい。",
+    choices:["いいですよ", "お先に失礼します", "ごちそうさまでした"], answer:0,
+    explanation:"お願いを引き受けるときは「いいですよ」と答えられます。",
+    manager:"相手のお願いに自然に返事ができました！"
+  },
+  {
+  type: "conversation",
+  character: "customer01",
+  location: "教室",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：毎日日本語を勉強していますか。<br>B：はい、毎日＿＿＿＿。",
+  choices: ["勉強しています", "勉強しました", "勉強したいです"],
+  answer: "勉強しています"
+},
+{
+  type: "conversation",
+  character: "customer02",
+  location: "駅",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：駅までどのくらいかかりますか。<br>B：歩いて10分＿＿＿＿。",
+  choices: ["です", "します", "あります"],
+  answer: "です"
+},
+{
+  type: "conversation",
+  character: "customer03",
+  location: "家",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A:ジュースを飲みますか。<br>B:ううん、水が＿＿＿＿です。",
+  choices: ["いい", "よく", "好き"],
+  answer: "好き"
+},
+{
+  type: "conversation",
+  character: "customer04",
+  location: "食堂",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：昨日、何を食べましたか。<br>B：ラーメンを＿＿＿＿。",
+  choices: ["食べます", "食べました", "食べています"],
+  answer: "食べました"
+},
+{
+  type: "conversation",
+  character: "customer01",
+  location: "公園",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：今から銀行へ行きます。<br>B：じゃあ、気をつけて＿＿＿＿。",
+  choices: ["ください", "します", "います"],
+  answer: "ください"
+},
+{
+  type: "conversation",
+  character: "customer02",
+  location: "教室",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：この漢字、読めますか。<br>B：いいえ、読むことが＿＿＿＿。",
+  choices: ["できます", "できません", "しました"],
+  answer: "できません"
+},
+{
+  type: "conversation",
+  character: "customer03",
+  location: "スーパー",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "店員：袋は必要ですか。<br>客：いいえ、＿＿＿＿。",
+  choices: ["だいじょうぶです", "いきます", "あります"],
+  answer: "だいじょうぶです"
+},
+{
+  type: "conversation",
+  character: "customer04",
+  location: "駅",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：すみません、トイレはどこですか。<br>B：あそこを右に＿＿＿＿。",
+  choices: ["曲がってください", "曲がりました", "曲がります"],
+  answer: "曲がってください"
+},
+{
+  type: "conversation",
+  character: "customer01",
+  location: "公園",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：今日はとても＿＿＿＿ですね。<br>B：そうですね。コートを着ましょう。",
+  choices: ["寒い", "寒く", "寒さ"],
+  answer: "寒い"
+},
+{
+  type: "conversation",
+  character: "customer02",
+  location: "公園",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：土曜日に買い物に行きませんか。<br>B：いいですね。＿＿＿＿。",
+  choices: ["行きましょう", "行きました", "行っています"],
+  answer: "行きましょう"
+},
+{
+  type: "conversation",
+  character: "customer03",
+  location: "会社",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：仕事は何時に終わりますか。<br>B：5時に＿＿＿＿。",
+  choices: ["終わります", "終わりました", "終わって"],
+  answer: "終わります"
+},
+{
+  type: "conversation",
+  character: "customer04",
+  location: "教室",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "先生：教科書を見ないでください。<br>学生：はい、＿＿＿＿。",
+  choices: ["わかりました", "見ました", "できました"],
+  answer: "わかりました"
+},
+{
+  type: "conversation",
+  character: "customer01",
+  location: "学校",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：この荷物は重いですか。<br>B：いいえ、あまり＿＿＿＿。",
+  choices: ["重くないです", "重いです", "重さです"],
+  answer: "重くないです"
+},
+{
+  type: "conversation",
+  character: "customer02",
+  location: "会社",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：昼ご飯はもう食べましたか。<br>B：いいえ、まだ＿＿＿＿。",
+  choices: ["です", "食べていません", "食べました"],
+  answer: "食べていません"
+},
+{
+  type: "conversation",
+  character: "customer03",
+  location: "教室",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：ペンを貸していただけませんか。<br>B：＿＿＿＿。",
+  choices: ["いいですよ", "だめでした", "いません"],
+  answer: "いいですよ"
+},
+{
+  type: "conversation",
+  character: "customer04",
+  location: "学校",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：日本へ来て何年ですか。<br>B：3年＿＿＿＿。",
+  choices: ["です", "あります", "します"],
+  answer: "です"
+},
+{
+  type: "conversation",
+  character: "customer01",
+  location: "家",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：明日は早いので、今日は＿＿＿＿寝ます。<br>B：そうですか。おやすみなさい。",
+  choices: ["早く", "早い", "早さ"],
+  answer: "早く"
+},
+{
+  type: "conversation",
+  character: "customer02",
+  location: "スーパー",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：すみません。明日は用事があるので、アルバイトを休んでもいいですか。<br>B：はい、＿＿＿＿。",
+  choices: ["かまいません", "いけません", "なりません"],
+  answer: "かまいません"
+},
+  {
+    type: "conversation",
+    character: "manager",
+      location: "教室",
+    question1: "＿＿＿＿に入る言葉を選びなさい。",
+    q: "学生：先生、おはようございます。<br>先生：＿＿＿＿。",
+    choices: [
+      "おはようございます",
+      "おやすみなさい",
+      "いただきます",
+    ],
+    answer: "おはようございます",
+    image: "images/characters/manager_happy.png"
+  },
+  {
+    type: "conversation",
+    character: "manager",
+      location: "教室",
+    question1: "＿＿＿＿に入る言葉を選びなさい。",
+    q: "学生：先生、_________<br>先生：これは日本語の本です。",
+    choices: [
+      "これは何ですか",
+      "どこへ行きますか",
+      "何時ですか",
+    ],
+    answer: "これは何ですか",
+    image: "images/characters/manager_normal.png"
+  },
+  {
+    type: "conversation",
+    character: "manager",
+      location: "教室",
+    question1: "＿＿＿＿に入る言葉を選びなさい。",
+    q: "学生：先生、宿題を忘れました。すみません。<br>先生：＿＿＿＿。",
+    choices: [
+      "次は忘れないでください",
+      "お誕生日おめでとうございます",
+      "いってらっしゃい",
+    ],
+    answer: "次は忘れないでください",
+    image: "images/characters/manager_angry.png"
+  },
+  {
+    type: "conversation",
+    character: "manager",
+      location: "教室",
+    question1: "＿＿＿＿に入る言葉を選びなさい。",
+    q: "学生：先生、_____________<br>先生：はい、いいですよ。",
+    choices: [
+      "質問してもいいですか",
+      "ここで食べてもいいですか",
+      "写真を撮ってもいいですか",
+    ],
+    answer: "質問してもいいですか",
+    image: "images/characters/manager_happy.png"
+  },
+  {
+    type: "conversation",
+    character: "manager",
+      location: "公園",
+    question1: "＿＿＿＿に入る言葉を選びなさい。",
+    q: "学生：先生、__________<br>先生：あの信号を右に曲がってください。",
+    choices: [
+      "駅はどこですか",
+      "これはいくらですか",
+      "何を食べますか",
+    ],
+    answer: "駅はどこですか",
+    image: "images/characters/manager_normal.png"
+  },
+  {
+  type: "conversation",
+  character: "customer01",
+  location: "教室",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "先生：この部屋ではタバコを＿＿＿＿ちゃだめです。",
+  choices: ["すっ", "すい", "すう"],
+  answer: "すっ"
+},
+{
+  type: "conversation",
+  character: "customer02",
+  location: "教室",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "先生：試験中はスマホを＿＿＿＿はいけません。",
+  choices: ["見ら", "見る", "見て"],
+  answer: "見て"
+},
+{
+  type: "conversation",
+  character: "customer03",
+  location: "公園",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：ここに車を＿＿＿＿ちゃだめですよ。<br>B：わかりました。",
+  choices: ["とめ", "とまっ", "とめる"],
+  answer: "とめ"
+},
+{
+  type: "conversation",
+  character: "customer04",
+  location: "市役所",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：パスポートをなくしました。<br>B：そのままに＿＿＿＿てはいけませんよ。",
+  choices: ["し", "する", "した"],
+  answer: "し"
+},
+{
+  type: "conversation",
+  character: "customer01",
+  location: "病院",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "医者：この薬は一日に三回以上＿＿＿＿じゃだめですよ。",
+  choices: ["のん", "のみ", "のむ"],
+  answer: "のん"
+},
+{
+  type: "conversation",
+  character: "customer02",
+  location: "公園",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：ゴミばこにゴミが＿＿＿＿ていました。<br>B：だれが捨てたんでしょうね。",
+  choices: ["すてられ", "すてる", "すてら"],
+  answer: "すてられ"
+},
+{
+  type: "conversation",
+  character: "customer03",
+  location: "電車",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：どうしましたか。<br>B：電車のなかで、足を＿＿＿＿たんです。",
+  choices: ["ふまれ", "ふんだ", "ふまられ"],
+  answer: "ふまれ"
+},
+{
+  type: "conversation",
+  character: "customer04",
+  location: "駅",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：さいふがない！<br>B：だれかにさいふを＿＿＿＿かもしれません。",
+  choices: ["とられた", "とった", "とらせ"],
+  answer: "とられた"
+},
+{
+  type: "conversation",
+  character: "customer01",
+  location: "病院",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：どうしたんですか。<br>B：ころんで、ほねを＿＿＿＿かもしれません。",
+  choices: ["おった", "おられた", "おって"],
+  answer: "おった"
+},
+{
+  type: "conversation",
+  character: "customer01",
+  location: "道",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：道を＿＿＿＿とき、リスを見ました。",
+  choices: ["歩く", "歩いている", "歩いく"],
+  answer: "歩いている"
+},
+{
+  type: "conversation",
+  character: "customer02",
+  location: "沖縄",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：沖縄の海をはじめて＿＿＿＿とき、とても感動しました。",
+  choices: ["見る", "見た", "見と"],
+  answer: "見た"
+},
+{
+  type: "conversation",
+  character: "customer03",
+  location: "旅行先",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：日光に＿＿＿＿とき、厚い上着を持って行ったほうがいいですよ。",
+  choices: ["行く", "行っている", "行け"],
+  answer: "行く"
+},
+{
+  type: "conversation",
+  character: "customer04",
+  location: "映画館",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：ショーを＿＿＿＿とき、ちょっと眠くなりました。",
+  choices: ["見る", "見ている", "見ろ"],
+  answer: "見ている"
+},
+{
+  type: "conversation",
+  character: "customer01",
+  location: "あべのハルカス",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：あべのハルカスに＿＿＿＿とき、展望台から空港が見えました。",
+  choices: ["登り", "登って", "登った"],
+  answer: "登った"
+},
+{
+  type: "conversation",
+  character: "customer02",
+  location: "海",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：雨が＿＿＿＿とき、海で泳ぎたくないです。",
+  choices: ["降り", "降っている", "降って"],
+  answer: "降っている"
+},
+{
+  type: "conversation",
+  character: "customer03",
+  location: "お寺",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：お寺の中に＿＿＿＿とき、くつを脱ぎました。",
+  choices: ["入る", "入り", "入って"],
+  answer: "入る"
+},
+{
+  type: "conversation",
+  character: "customer01",
+  location: "道端",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：道を＿＿＿＿とき、リスを見ました。",
+  choices: ["歩く", "歩いている", "歩いく"],
+  answer: "歩いている"
+},
+{
+  type: "conversation",
+  character: "customer02",
+  location: "海",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：沖縄の海をはじめて＿＿＿＿とき、とても感動しました。",
+  choices: ["見る", "見た", "見と"],
+  answer: "見た"
+},
+{
+  type: "conversation",
+  character: "customer03",
+  location: "駅",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：日光に＿＿＿＿とき、厚い上着を持って行ったほうがいいですよ。",
+  choices: ["行く", "行っている", "行け"],
+  answer: "行く"
+},
+{
+  type: "conversation",
+  character: "customer04",
+  location: "教室",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：ショーを＿＿＿＿とき、ちょっと眠くなりました。",
+  choices: ["見る", "見ている", "見ろ"],
+  answer: "見ている"
+},
+{
+  type: "conversation",
+  character: "customer01",
+  location: "学校の入口",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：あべのハルカスに＿＿＿＿とき、展望台から空港が見えました。",
+  choices: ["登り", "登って", "登った"],
+  answer: "登った"
+},
+{
+  type: "conversation",
+  character: "customer02",
+  location: "バス停",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：雨が＿＿＿＿とき、海で泳ぎたくないです。",
+  choices: ["降り", "降っている", "降って"],
+  answer: "降っている"
+},
+{
+  type: "conversation",
+  character: "customer03",
+  location: "家",
+  question1: "＿＿＿＿に入る言葉を選びなさい。",
+  q: "A：お寺の中に＿＿＿＿とき、くつを脱ぎました。",
+  choices: ["入る", "入り", "入って"],
+  answer: "入る"
+},
+{
+  type:"会話", character:"customer08", location:"教室",
+  text:"A：すみません。この漢字は何と読みますか。<br>B：＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["「学校」と読みます", "学校へ行きます", "学校で勉強します"],
+  answer:0,
+  explanation:"漢字の読み方を聞かれたら、「～と読みます」と答えます。",
+  manager:"教室でよく使う表現です。"
+},
+{
+  type:"会話", character:"customer10", location:"学校の入口",
+  text:"A：おはようございます。<br>B：＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["おやすみなさい", "おはようございます", "いただきます"],
+  answer:1,
+  explanation:"朝のあいさつには「おはようございます」と答えます。",
+  manager:"あいさつは日本の生活で大切です。"
+},
+{
+  type:"会話", character:"customer07", location:"駅",
+  text:"A：すみません。東京行きの電車は何番線ですか。<br>B：＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["3番線です", "3時です", "3人です"],
+  answer:0,
+  explanation:"電車が出発するホームは「～番線です」と答えます。",
+  manager:"駅では番線を確認しましょう。"
+},
+{
+  type:"会話", character:"customer09", location:"バス停",
+  text:"A：このバスは市役所へ行きますか。<br>B：＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["はい、市役所へ行きます", "はい、市役所を食べます", "はい、市役所を飲みます"],
+  answer:0,
+  explanation:"行き先を聞かれたら、「はい、～へ行きます」と答えます。",
+  manager:"バスに乗る前に行き先を確認しましょう。"
+},
+{
+  type:"会話", character:"customer10", location:"家",
+  text:"A：明日、何時に起きますか。<br>B：＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["7時に起きます", "7時を起きます", "7時で起きます"],
+  answer:0,
+  explanation:"時刻を表す「7時」のあとには「に」を使います。",
+  manager:"毎日の生活について話す表現です。"
+},
+{
+  type:"会話", character:"customer07", location:"食堂",
+  text:"A：ご注文はお決まりですか。<br>B：＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["カレーライスをお願いします", "カレーライスへ行きます", "カレーライスを見ます"],
+  answer:0,
+  explanation:"食堂で注文するときは、「～をお願いします」と言えます。",
+  manager:"食堂での注文に使う表現です。"
+},
+{
+  type:"会話", character:"customer09", location:"スーパー",
+  text:"A：すみません。牛乳はどこにありますか。<br>B：＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["あちらの冷蔵コーナーです", "あちらで寝ます", "あちらを飲みます"],
+  answer:0,
+  explanation:"場所を聞かれたら、場所を表す言葉で答えます。",
+  manager:"買い物でよく使う表現です。"
+},
+{
+  type:"会話", character:"customer08", location:"病院",
+  text:"A：どうしましたか。<br>B：＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["頭が痛いです", "頭を買いたいです", "頭を読みたいです"],
+  answer:0,
+  explanation:"体の具合を聞かれたら、症状を伝えます。",
+  manager:"病院では症状を具体的に伝えましょう。"
+},
+{
+  type:"会話", character:"customer10", location:"会社",
+  text:"A：すみません。少し遅れます。<br>B：わかりました。気をつけて＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["来てください", "食べてください", "寝てください"],
+  answer:0,
+  explanation:"相手がこちらへ来るときは、「来てください」と言います。",
+  manager:"会社での連絡に使う表現です。"
+},
+{
+  type:"会話", character:"customer07", location:"図書館",
+  text:"A：この本を借りたいです。<br>B：＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["こちらに図書カードを出してください", "こちらで泳いでください", "こちらを食べてください"],
+  answer:0,
+  explanation:"本を借りるときは、図書館の利用カードなどを提示します。",
+  manager:"図書館での手続きに使う表現です。"
+},
+{
+  type:"会話", character:"customer08", location:"郵便局",
+  text:"A：この荷物をネパールへ送りたいです。<br>B：＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["こちらに住所を書いてください", "こちらで住所を食べてください", "こちらへ住所を飲んでください"],
+  answer:0,
+  explanation:"荷物を送るときは、送り先の住所を書きます。",
+  manager:"郵便局でよく使う表現です。"
+},
+{
+  type:"会話", character:"customer09", location:"公園",
+  text:"A：ここでサッカーをしてもいいですか。<br>B：すみません。ここでは＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["できません", "食べませんか", "飲みません"],
+  answer:0,
+  explanation:"禁止や許可について答えるときは、「できません」などを使います。",
+  manager:"場所のルールを確認しましょう。"
+},
+{
+  type:"会話", character:"customer07", location:"市役所",
+  text:"A：住所が変わりました。<br>B：では、こちらで＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["手続きをしてください", "泳いでください", "料理してください"],
+  answer:0,
+  explanation:"住所が変わったときは、市役所などで必要な手続きをします。",
+  manager:"市役所での手続きに使う表現です。"
+},
+{
+  type:"会話", character:"customer10", location:"電話",
+  text:"A：もしもし、田中さんはいらっしゃいますか。<br>B：少々＿＿＿＿ください。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["お待ち", "お食べ", "お飲み"],
+  answer:0,
+  explanation:"電話で相手を待たせるときは、「少々お待ちください」と言います。",
+  manager:"電話でよく使う丁寧な表現です。"
+},
+{
+  type:"会話", character:"customer09", location:"海",
+  text:"A：今日は海で泳ぎますか。<br>B：いいえ、波が高いので＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["泳ぎません", "泳ぎますか", "泳いでください"],
+  answer:0,
+  explanation:"泳がないことを伝えるときは、「泳ぎません」と言います。",
+  manager:"天気や海の状態を確認して行動しましょう。"
+},
+{
+  type:"会話", character:"customer08", location:"駅",
+  text:"A：すみません。次の電車は何時ですか。<br>B：＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["10時15分です", "10人です", "10番線を食べます"],
+  answer:0,
+  explanation:"時刻を聞かれたら、「～時～分です」と答えます。",
+  manager:"駅では時刻表を確認しましょう。"
+},
+{
+  type:"会話", character:"customer07", location:"スーパー",
+  text:"A：このシャツはいくらですか。<br>B：＿＿＿＿円です。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["2,000", "2,000人", "2,000時"],
+  answer:0,
+  explanation:"値段は「～円」で表します。",
+  manager:"買い物では値段を確認しましょう。"
+},
+{
+  type:"会話", character:"customer09", location:"会社",
+  text:"A：すみません。明日は休んでもいいですか。<br>B：理由を＿＿＿＿ください。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["教えて", "食べて", "泳いで"],
+  answer:0,
+  explanation:"理由を聞くときは、「理由を教えてください」と言います。",
+  manager:"休みの相談は、早めに連絡しましょう。"
+},
+{
+  type:"会話", character:"customer10", location:"教室",
+  text:"A：宿題を忘れました。すみません。<br>B：次から忘れないように＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["してください", "食べてください", "泳いでください"],
+  answer:0,
+  explanation:"相手に注意するときは、「～するようにしてください」と言えます。",
+  manager:"学校での注意やお願いに使う表現です。"
+},
+{
+  type:"会話", character:"customer08", location:"病院",
+  text:"A：この薬はいつ飲みますか。<br>B：毎食後に＿＿＿＿ください。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["飲んで", "乗って", "読んで"],
+  answer:0,
+  explanation:"薬の飲み方を説明するときは、「飲んでください」と言います。",
+  manager:"薬は医師や薬剤師の説明に従って飲みましょう。"
+},
+{
+  type:"会話", character:"customer05", location:"教室",
+  text:"A：すみません。もう一度言ってください。<br>B：はい、＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["もう一度言います", "もう一度食べます", "もう一度寝ます"],
+  answer:0,
+  explanation:"聞き取れなかったときは、もう一度言ってもらうようにお願いします。",
+  manager:"会話で聞き返すときに使う表現です。"
+},
+{
+  type:"会話", character:"customer06", location:"駅",
+  text:"A：すみません。大阪へ行きたいんですが。<br>B：この電車に＿＿＿＿ください。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["乗って", "降りて", "歩いて"],
+  answer:0,
+  explanation:"電車やバスを利用するときは「乗る」を使います。",
+  manager:"駅での案内によく使う表現です。"
+},
+{
+  type:"会話", character:"customer05", location:"スーパー",
+  text:"A：レジ袋はいりますか。<br>B：いいえ、＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["いりません", "わかりません", "できません"],
+  answer:0,
+  explanation:"必要ないときは「いりません」と答えます。",
+  manager:"買い物でよく使う表現です。"
+},
+{
+  type:"会話", character:"customer06", location:"食堂",
+  text:"A：すみません。水をもう一杯もらえますか。<br>B：＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["はい、少々お待ちください", "いいえ、昨日です", "はい、駅にあります"],
+  answer:0,
+  explanation:"お願いを受けたときは「少々お待ちください」と答えられます。",
+  manager:"お店での丁寧な受け答えです。"
+},
+{
+  type:"会話", character:"customer05", location:"病院",
+  text:"A：いつから熱がありますか。<br>B：＿＿＿＿からです。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["昨日", "明日", "来週"],
+  answer:0,
+  explanation:"今、熱がある場合は「昨日からです」のように始まった時を答えます。",
+  manager:"病院では、症状が始まった時を伝えましょう。"
+},
+{
+  type:"会話", character:"customer06", location:"会社",
+  text:"A：この書類、今日中にお願いします。<br>B：はい、＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["わかりました", "おいしかったです", "お元気ですか"],
+  answer:0,
+  explanation:"指示を理解したときは「わかりました」と答えます。",
+  manager:"職場での基本的な受け答えです。"
+},
+{
+  type:"会話", character:"customer05", location:"郵便局",
+  text:"A：この手紙を速達で送りたいです。<br>B：＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["かしこまりました", "いただきます", "おやすみなさい"],
+  answer:0,
+  explanation:"相手の希望を受けるときは「かしこまりました」と答えられます。",
+  manager:"窓口で使われる丁寧な表現です。"
+},
+{
+  type:"会話", character:"customer06", location:"家",
+  text:"A：窓が開いていますよ。<br>B：あ、本当ですね。窓を＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["閉めます", "消します", "洗います"],
+  answer:0,
+  explanation:"窓を開けた状態から元に戻すときは「閉める」を使います。",
+  manager:"家の中でよく使う表現です。"
+},
+{
+  type:"会話", character:"customer05", location:"図書館",
+  text:"A：この本は何日間借りられますか。<br>B：2週間＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["借りられます", "食べられます", "泳げます"],
+  answer:0,
+  explanation:"本を借りられる期間について答える表現です。",
+  manager:"図書館で期間を確認するときに使います。"
+},
+{
+  type:"会話", character:"customer06", location:"バス停",
+  text:"A：バスはもう来ましたか。<br>B：いいえ、まだ＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["来ていません", "来ました", "来てください"],
+  answer:0,
+  explanation:"まだ到着していないことは「まだ来ていません」と言います。",
+  manager:"待ち合わせや交通機関で使う表現です。"
+},
+{
+  type:"会話", character:"customer06", location:"駅",
+  text:"A：次の電車は何時ですか。<br>B：あと5分で＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["来ます", "行きます", "乗ります"],
+  answer:0,
+  explanation:"電車が到着することは「来ます」と言います。",
+  manager:"駅や電車でよく使う表現です。"
+},
+{
+  type:"会話", character:"customer07", location:"コンビニ",
+  text:"A：このおにぎり、温めますか。<br>B：いいえ、そのままで＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["お願いします", "ありがとうございます", "いただきます"],
+  answer:0,
+  explanation:"依頼するときは「お願いします」と言います。",
+  manager:"買い物のときによく使う表現です。"
+},
+{
+  type:"会話", character:"customer08", location:"会社",
+  text:"A：田中さんはいますか。<br>B：今、会議中なので＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["話せません", "話します", "帰ります"],
+  answer:0,
+  explanation:"会議中は電話や会話ができないので「話せません」と言います。",
+  manager:"会社でよく使う表現です。"
+},
+{
+  type:"会話", character:"customer09", location:"病院",
+  text:"A：具合はどうですか。<br>B：熱があるので、少し＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["つらいです", "元気です", "楽しいです"],
+  answer:0,
+  explanation:"体調が悪いときは「つらいです」と言います。",
+  manager:"病院や日常会話で使う表現です。"
+},
+{
+  type:"会話", character:"customer10", location:"スーパー",
+  text:"A：レジ袋は必要ですか。<br>B：いいえ、袋は＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["いりません", "あります", "ください"],
+  answer:0,
+  explanation:"必要ないときは「いりません」と言います。",
+  manager:"買い物でよく使う表現です。"
+},
+{
+  type:"会話", character:"customer06", location:"ホテル",
+  text:"A：チェックインをお願いします。<br>B：お名前を＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["お願いします", "見ます", "行きます"],
+  answer:0,
+  explanation:"名前を聞くときは「お名前をお願いします」と言います。",
+  manager:"ホテルで使う表現です。"
+},
+{
+  type:"会話", character:"customer07", location:"レストラン",
+  text:"A：ご注文はお決まりですか。<br>B：はい、ラーメンを＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["お願いします", "知ります", "待ちます"],
+  answer:0,
+  explanation:"料理を注文するときは「お願いします」と言います。",
+  manager:"飲食店でよく使います。"
+},
+{
+  type:"会話", character:"customer08", location:"郵便局",
+  text:"A：この荷物を送りたいです。<br>B：こちらに名前を＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["書いてください", "見てください", "読んでください"],
+  answer:0,
+  explanation:"用紙に記入するときは「書いてください」と言います。",
+  manager:"手続きで使う表現です。"
+},
+{
+  type:"会話", character:"customer09", location:"学校",
+  text:"A：宿題は終わりましたか。<br>B：いいえ、まだ＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["終わっていません", "終わりました", "始めました"],
+  answer:0,
+  explanation:"まだ終わっていないときは「終わっていません」と言います。",
+  manager:"勉強でよく出る表現です。"
+},
+{
+  type:"会話", character:"customer10", location:"職場",
+  text:"A：この書類はどこですか。<br>B：机の上に＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["あります", "います", "行きます"],
+  answer:0,
+  explanation:"物の場所を言うときは「あります」を使います。",
+  manager:"職場でよく使う表現です。"
+},
+{
+  type:"会話", character:"customer03", location:"駅",
+  text:"A：電車はもう出ましたか。<br>B：いいえ、まだ＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["出ていません","出ました","乗りました"],
+  answer:0,
+  explanation:"まだ出発していないので「出ていません」が正解です。",
+  manager:"駅でよく使う表現です。"
+},
+{
+  type:"会話", character:"customer08", location:"コンビニ",
+  text:"A：お弁当を温めますか。<br>B：はい、＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["お願いします","ありがとうございます","すみません"],
+  answer:0,
+  explanation:"依頼するときは「お願いします」を使います。",
+  manager:"買い物でよく使います。"
+},
+{
+  type:"会話", character:"customer01", location:"会社",
+  text:"A：コピーは終わりましたか。<br>B：はい、もう＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["終わりました","終わりません","終わります"],
+  answer:0,
+  explanation:"すでに完了しているので「終わりました」です。",
+  manager:"職場でよく出る表現です。"
+},
+{
+  type:"会話", character:"customer10", location:"病院",
+  text:"A：今日はどうしましたか。<br>B：頭が＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["痛いです","高いです","好きです"],
+  answer:0,
+  explanation:"頭の具合を言うときは「頭が痛いです」です。",
+  manager:"病院でよく使います。"
+},
+{
+  type:"会話", character:"customer06", location:"スーパー",
+  text:"A：レジ袋は必要ですか。<br>B：いいえ、＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["いりません","あります","ください"],
+  answer:0,
+  explanation:"必要ないときは「いりません」と答えます。",
+  manager:"買い物でよく使います。"
+},
+{
+  type:"会話", character:"customer04", location:"ホテル",
+  text:"A：何泊のご予定ですか。<br>B：2泊＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["です","します","います"],
+  answer:0,
+  explanation:"泊数を言うときは「2泊です」と言います。",
+  manager:"ホテルで使う表現です。"
+},
+{
+  type:"会話", character:"customer09", location:"学校",
+  text:"A：宿題は終わりましたか。<br>B：いいえ、まだ＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["終わっていません","終わりました","始まりました"],
+  answer:0,
+  explanation:"まだ終わっていないので「終わっていません」です。",
+  manager:"勉強でよく使います。"
+},
+{
+  type:"会話", character:"customer02", location:"郵便局",
+  text:"A：この荷物を送りたいです。<br>B：こちらに名前を＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["書いてください","読んでください","見てください"],
+  answer:0,
+  explanation:"用紙への記入は「書いてください」です。",
+  manager:"手続きでよく使います。"
+},
+{
+  type:"会話", character:"customer07", location:"レストラン",
+  text:"A：ご注文はお決まりですか。<br>B：カレーを＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["お願いします","知ります","食べます"],
+  answer:0,
+  explanation:"注文するときは「お願いします」を使います。",
+  manager:"飲食店でよく使う表現です。"
+},
+{
+  type:"会話", character:"customer05", location:"バス停",
+  text:"A：次のバスは何時に来ますか。<br>B：10分後に＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["来ます","帰ります","降ります"],
+  answer:0,
+  explanation:"バスの到着は「来ます」を使います。",
+  manager:"交通機関でよく使います。"
+},
+{
+  type:"会話", character:"customer08", location:"会社",
+  text:"A：田中さんは今いますか。<br>B：外出中なので＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["いません","います","来ます"],
+  answer:0,
+  explanation:"外出中なら「いません」です。",
+  manager:"会社でよく使う表現です。"
+},
+{
+  type:"会話", character:"customer01", location:"郵便局",
+  text:"A：どのくらい待ちますか。<br>B：あと15分ほど＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["かかります","あります","なります"],
+  answer:0,
+  explanation:"時間が必要なときは「かかります」を使います。",
+  manager:"日常会話で使います。"
+},
+{
+  type:"会話", character:"customer10", location:"駅",
+  text:"A：切符をなくしました。<br>B：駅員に＿＿＿＿ください。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["聞いて","食べて","使って"],
+  answer:0,
+  explanation:"質問するときは「聞いてください」です。",
+  manager:"困ったときの表現です。"
+},
+{
+  type:"会話", character:"customer03", location:"公園",
+  text:"A：ゴミの日はいつですか。<br>B：毎週水曜日に＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["出します","買います","開けます"],
+  answer:0,
+  explanation:"ゴミは「出します」を使います。",
+  manager:"生活でよく使う表現です。"
+},
+{
+  type:"会話", character:"customer06", location:"病院",
+  text:"A：保険証を持っていますか。<br>B：はい、＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["持っています","知っています","使っています"],
+  answer:0,
+  explanation:"所持しているときは「持っています」です。",
+  manager:"病院で使います。"
+},
+{
+  type:"会話", character:"customer04", location:"学校",
+  text:"A：日本語の勉強はどうですか。<br>B：とても＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["楽しいです","大きいです","高いです"],
+  answer:0,
+  explanation:"勉強の感想は「楽しいです」が自然です。",
+  manager:"会話問題でよく出ます。"
+},
+{
+  type:"会話", character:"customer07", location:"スーパー",
+  text:"A：この牛乳はいくらですか。<br>B：250円＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["です","します","います"],
+  answer:0,
+  explanation:"値段を言うときは「250円です」です。",
+  manager:"買い物で使います。"
+},
+{
+  type:"会話", character:"customer02", location:"公園",
+  text:"A：今日は暑いですね。<br>B：そうですね。水をたくさん＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["飲みましょう","歩きましょう","見ましょう"],
+  answer:0,
+  explanation:"暑い日は水を飲むことが大切です。",
+  manager:"日常会話でよく使います。"
+},
+{
+  type:"会話", character:"customer09", location:"レストラン",
+  text:"A：お料理はいかがでしたか。<br>B：とても＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["おいしかったです","遠かったです","忙しかったです"],
+  answer:0,
+  explanation:"料理の感想は「おいしかったです」です。",
+  manager:"食事の場面で使います。"
+},
+{
+  type:"会話", character:"customer05", location:"会社",
+  text:"A：明日の会議は何時ですか。<br>B：午前9時から＿＿＿＿。",
+  instruction:"＿＿＿＿に入る言葉を選びなさい。",
+  choices:["です","あります","します"],
+  answer:1,
+  explanation:"会議が行われる場合は「あります」が自然です。",
+  manager:"職場でよく使う表現です。"
+}
+
+];
+
+
+
+/* ===================================================
+
+   ステート管理＆ロジック
+
+\=================================================== */
+
+let index = 0, coins = 0, correctCount = 0, streak = 0, answered = false;
+
+let history = [];
+
+function shuffleArray(array) {
+
+  return [...array].sort(() => Math.random() - 0.5);
+
+}
+
+let currentQuiz = [];
+
+
+function startGame() {
+  // 全問題からランダムに10問を選ぶ
+  currentQuiz = shuffleArray(quiz)
+    .slice(0, 10)
+    .map(q => {
+      // 古い問題形式・新しい問題形式の両方に対応
+      const text = q.text ?? q.q;
+      const instruction = q.instruction ?? q.question1;
+
+      // 正解を番号に統一
+      const originalAnswer =
+        typeof q.answer === "number"
+          ? q.answer
+          : q.choices.indexOf(q.answer);
+
+      // 選択肢と正解番号をセットでシャッフル
+      const shuffledChoices = shuffleArray(
+        q.choices.map((label, originalIndex) => ({
+          label,
+          originalIndex
+        }))
+      );
+
+      const newAnswer = shuffledChoices.findIndex(
+        choice => choice.originalIndex === originalAnswer
+      );
+
+      return {
+        ...q,
+        text,
+        instruction,
+        choices: shuffledChoices.map(choice => choice.label),
+        answer: newAnswer
+      };
+    });
+
+  index = 0;
+  coins = 0;
+  correctCount = 0;
+  streak = 0;
+  history = [];
+
+  document.getElementById("startScreen").classList.add("hidden");
+  document.getElementById("endScreen").classList.add("hidden");
+  document.getElementById("gameScreen").classList.remove("hidden");
+  document.getElementById("progressWrap").classList.remove("hidden");
+
+  updateStats();
+  renderQuestion();
+}
+
+
+function renderQuestion() {
+
+  if (index >= currentQuiz.length) { finishGame(); return; }
+
+  answered = false;
+
+  const q = currentQuiz[index];
+
+  const person = CHARACTERS[q.character] || CHARACTERS.customer01;
+
+
+
+  document.getElementById("missionLabel").textContent = `ミッション ${index + 1} [${q.type}]`;
+
+  document.getElementById("progressText").textContent = `${index + 1} / ${currentQuiz.length}`;
+
+  document.getElementById("progressBar").style.width = `${(index / currentQuiz.length) * 100}%`;
+
+  document.getElementById("location").textContent = q.location;
+
+  document.getElementById("personName").textContent = person.name;
+
+  document.getElementById("dialogLabel").textContent = `💬 ${person.name}`;
+
+  document.getElementById("questionText").innerHTML = q.text;
+
+  document.getElementById("instruction").textContent = q.instruction;
+
+changeBackground(q.location);
+
+  // キャラクター画像・フォールバック
+
+  const img = document.getElementById("character");
+
+  const fallback = document.getElementById("characterFallback");
+
+  img.src = person.normal;
+
+  img.onerror = () => { img.style.display = "none"; fallback.style.display = "block"; fallback.textContent = person.icon; };
+
+  img.onload = () => { img.style.display = "block"; fallback.style.display = "none"; };
+
+
+
+  // 選択肢の描画
+
+  const choices = document.getElementById("choices");
+
+  choices.innerHTML = "";
+
+  q.choices.forEach((label, i) => {
+
+    const btn = document.createElement("button");
+
+    btn.className = "choice";
+
+    btn.type = "button";
+
+    btn.innerHTML = `<span class="letter">${["A", "B", "C"][i]}</span><span>${label}</span>`;
+
+    btn.addEventListener("click", () => chooseAnswer(i, btn));
+
+    choices.appendChild(btn);
+
+  });
+
+
+
+  // リセット
+
+  document.getElementById("feedback").className = "feedback";
+
+  document.getElementById("managerLine").classList.add("hidden");
+
+  document.getElementById("hintBtn").disabled = coins < 10;
+
+
+
+  const nextBtn = document.getElementById("nextButton");
+
+  nextBtn.disabled = true;
+
+  nextBtn.textContent = "答えを選んでください ▶";
+
+}
+
+
+
+function changeCustomerExpression(expression) {
+    const q = currentQuiz[index];
+    const person = CHARACTERS[q.character];
+    const img = document.getElementById("character");
+
+    if (!person || !img) return;
+
+    if (expression === "happy") {
+        img.src = person.happy;
+    } else if (expression === "angry") {
+        img.src = person.angry;
+    } else {
+        img.src = person.normal;
+    }
+}
+
+
+function chooseAnswer(choiceIndex, selectedBtn) {
+
+  if (answered) return;
+
+  answered = true;
+
+  AudioEngine.init();
+
+
+
+  const q = currentQuiz[index];
+
+  const isCorrect = choiceIndex === q.answer;
+if (isCorrect) {
+    changeCustomerExpression("happy");
+} else {
+    changeCustomerExpression("angry");
+}
+  const choicesBtns = document.querySelectorAll(".choice");
+
+
+
+  choicesBtns.forEach(btn => btn.disabled = true);
+
+
+
+  const fb = document.getElementById("feedback");
+
+  const charImg = document.getElementById("character");
+
+
+
+  if (isCorrect) {
+
+    AudioEngine.playCorrect();
+
+    ParticleEngine.fire();
+
+    if (navigator.vibrate) navigator.vibrate(50);
+
+
+
+    selectedBtn.classList.add("correct");
+
+    charImg.classList.add("jump");
+
+    setTimeout(() => charImg.classList.remove("jump"), 400);
+
+
+
+    correctCount++;
+
+    streak++;
+
+    let earn = GAME_CONFIG.coinPerCorrect;
+
+    if (streak % 3 === 0) earn += GAME_CONFIG.streakBonusCoins;
+
+    coins += earn;
+
+
+
+    bumpStat("statCoin");
+
+    bumpStat("statStreak");
+
+ changeCustomerExpression("happy");
+
+    fb.className = "feedback good show";
+
+    fb.innerHTML = `⭕ <strong>正解！ (+${earn}コイン)</strong><small>${q.explanation}</small>`;
+
+  } else {
+
+    AudioEngine.playWrong();
+
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+
+
+    selectedBtn.classList.add("wrong");
+
+    choicesBtns[q.answer].classList.add("correct");
+
+    charImg.classList.add("shake");
+
+    setTimeout(() => charImg.classList.remove("shake"), 400);
+
+changeCustomerExpression("angry");
+
+    streak = 0;
+
+    fb.className = "feedback bad show";
+
+    fb.innerHTML = `❌ <strong>残念！</strong><small>${q.explanation}</small>`;
+
+  }
+
+
+
+  history.push({ type: q.type, correct: isCorrect, question: q.text, answer: q.choices[q.answer] });
+
+
+
+  // 店長コメント
+
+  const manager = document.getElementById("managerLine");
+
+  manager.textContent = q.manager;
+
+  manager.classList.remove("hidden");
+
+
+
+  // プログレス更新
+
+  document.getElementById("progressBar").style.width = `${((index + 1) / currentQuiz.length) * 100}%`;
+
+
+
+  const nextBtn = document.getElementById("nextButton");
+
+  nextBtn.disabled = false;
+
+  nextBtn.textContent = index === currentQuiz.length - 1 ? "結果を見る 🏆" : "次の問題へ ▶";
+
+
+
+  updateStats();
+
+}
+
+
+
+function useHint() {
+
+  if (coins < 10 || answered) return;
+
+  coins -= 10;
+
+  updateStats();
+
+  document.getElementById("hintBtn").disabled = true;
+
+
+
+  const q = currentQuiz[index];
+
+  const choicesBtns = document.querySelectorAll(".choice");
+
+  let removed = 0;
+
+
+
+  choicesBtns.forEach((btn, i) => {
+
+    if (i !== q.answer && removed < 1) {
+
+      btn.classList.add("dim");
+
+      removed++;
+
+    }
+
+  });
+
+}
+
+
+
+function bumpStat(id) {
+
+  const el = document.getElementById(id);
+
+  el.classList.add("bump");
+
+  setTimeout(() => el.classList.remove("bump"), 300);
+
+}
+
+
+
+function updateStats() {
+
+  document.getElementById("coin").textContent = coins;
+
+  document.getElementById("streak").textContent = streak;
+
+  document.getElementById("correctCount").textContent = correctCount;
+
+}
+
+
+
+function nextQuestion() {
+
+  if (!answered) return;
+
+  index++;
+
+  renderQuestion();
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
+}
+
+
+
+function finishGame() {
+
+  AudioEngine.playFanfare();
+
+  ParticleEngine.fire();
+
+
+
+  document.getElementById("gameScreen").classList.add("hidden");
+
+  document.getElementById("progressWrap").classList.add("hidden");
+
+  document.getElementById("endScreen").classList.remove("hidden");
+
+  // ハッピーエンド画像をランダムに選ぶ
+  const happyEndImages = [
+    "images/happyend/customer9end.png",
+    "images/happyend/customer8end.png",
+  ];
+
+  const endImage = document.getElementById("endImage");
+
+  // 正解率80%以上ならハッピーエンド
+  const rate = Math.round((correctCount / currentQuiz.length) * 100);
+
+  if (rate >= 80) {
+    const randomImage =
+      happyEndImages[Math.floor(Math.random() * happyEndImages.length)];
+
+    endImage.src = randomImage;
+    endImage.alt = "ハッピーエンド";
+  } else {
+    endImage.src = "images/result.png";
+    endImage.alt = "クエストの結果";
+  }
+
+
+
+
+  document.getElementById("finalCoins").textContent = coins;
+
+  document.getElementById("finalCorrect").textContent = correctCount;
+
+  document.getElementById("finalTotal").textContent = currentQuiz.length;
+
+  document.getElementById("finalRate").textContent = rate;
+
+
+
+  let rank, icon, title, msg;
+
+if (rate === 100) {
+  rank = "結婚しました。おめでとう！";
+  icon = "👑";
+  title = "🎉 パーフェクト！ハッピーエンド！";
+  msg = "結婚しました。おめでとう！";
+}
+else if (rate >= 80) {
+  rank = "結婚しました。おめでとう！";
+  icon = "🌟";
+  title = "🎉 ハッピーエンド！";
+  msg = "結婚しました。おめでとう！";
+}
+else if (rate >= 50) {
+  rank = "よくがんばりました！復習して、さらにレベルアップしましょう！";
+  icon = "👍";
+  title = "クエストクリア！";
+  msg = "よくがんばりました！復習して、さらにレベルアップしましょう！";
+}
+else {
+  rank = "もう一度挑戦して、高得点を目指しましょう！";
+  icon = "📖";
+  title = "研修終了！";
+  msg = "もう一度挑戦して、高得点を目指しましょう！";
+}
+
+
+
+  document.getElementById("rankName").textContent = rank;
+
+  document.getElementById("endIcon").textContent = icon;
+
+  document.getElementById("endTitle").textContent = title;
+
+  document.getElementById("endMessage").textContent = msg;
+
+
+
+  const review = document.getElementById("review");
+
+  const wrong = history.filter(x => !x.correct);
+
+  if (wrong.length === 0) {
+
+    review.innerHTML = "<strong>🎉 全問正解です！</strong><br>素晴らしい理解力です！";
+
+  } else {
+
+    review.innerHTML = "<strong>📌 復習ポイント</strong><br>" + wrong.map(x => `・[${x.type}] 正解: ${x.answer}`).join("<br>");
+
+  }
+
+}
+
+
+/* 配列をランダムに並べ替える */
+function shuffleArray(array) {
+    const result = [...array];
+
+    for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+    }
+
+    return result;
+}
+
+
+function restartGame() {
+
+  startGame();
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
+}
+
+</script>
+
+</body>
+
+</html>
